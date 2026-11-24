@@ -1,79 +1,188 @@
-# 健康管家
+# 健康管家 · health-advisor
 
-把本地健康导出和 `normalized-health/1` 数据变成可回查的个人报告。支持步数、睡眠、心率与 HRV、活动和训练、呼吸、体重等 15 项指标。每项展示日期、有效天数、数据来源和个人基线，便于下一次用相同口径复盘。
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![Tests](https://img.shields.io/badge/tests-69%20passing-brightgreen)](tests/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Stdlib only](https://img.shields.io/badge/dependencies-none-lightgrey)](scripts/)
 
-当前版本为 **v0.8.2**，发行包为 `health-advisor-0.8.2.zip`。本地 HTML 工作台将设备记录与用户补充资料放在同一页，调整目标后可即时试算。复盘可以带出已保存的目标、约束及上次结论。 [查看版本变更](CHANGELOG.md)
+把 **Apple 健康 / 华为运动健康 / Garmin** 的本地导出，变成**可回查、可比较**的个人健康复盘与本地 HTML 工作台。纯 Python 标准库、不联网、数据不出本机。
 
-## 先试一份合成数据
+它刻意不做三件事：不诊断、不调药、不解读设备波形。它做的是把设备记录按固定口径整理出来——每项指标都标日期、有效天数、来源和个人基线，让「这周比上周如何」这类问题有据可查，而不是凭印象。
 
-需要 Python 3.10 或以上。运行和测试均使用标准库。
+当前版本 **v0.8.2**，变更见 [CHANGELOG.md](CHANGELOG.md)。
 
-在这个项目目录下运行以下命令。
+## 特性
 
-```text
+- **固定口径，拒绝漂移**：日/夜中位数、有效覆盖天数、来源优先级统一。报告不会因为换了一周就换了算法，下次还能按同一口径复盘。
+- **个人基线与等长对照**：默认拿最近 7 天和此前 90 天比，也可切到紧邻的等长窗口（`--compare-previous`），两期窗口一样长才谈差值。
+- **睡眠分期与作息**：核心 / 深睡 / REM / 未分期时长、分期覆盖率、主睡眠起止与四分位距、跨夜合并、清醒区间扣除。
+- **多品牌入同一缓存**：`scripts/adapters/` 支持 Apple ZIP、Garmin CSV、华为 CSV/JSON，以及 `normalized-health/1` 中间格式；`import --merge` 累积多份导出并按唯一键去重。
+- **长期记忆**：记住你的目标、约束和每次复盘的一句话结论；下次报告会带出「上次那条行动做了没有」，到期自动标记。
+- **隐私优先**：来源只存类型与指纹不存设备名；`privacy` 自检、`purge` 清理；`brief`/`report` 只输出聚合级字段；ECG 只读分类不读波形，路线只算几何不出坐标。
+- **本地交互式工作台**：`workbench` 生成单文件 HTML，设备记录只读、补充资料可改，六维评分 / 健康三层 / SVG 趋势随输入即时试算，CSP `default-src 'none'` 不发任何网络请求。
+
+## 快速开始
+
+需要 **Python 3.10+**，无需安装任何第三方包。
+
+```bash
+git clone https://github.com/chencheng984/health-advisor.git
+cd health-advisor
+```
+
+先用合成数据跑一遍，确认环境正常：
+
+```bash
 python tests/make_demo.py local-demo/export.zip
 python scripts/health.py --db local-demo/health.sqlite3 import local-demo/export.zip
 python scripts/health.py --db local-demo/health.sqlite3 report --output local-demo/report.md
-python scripts/health.py --db local-demo/health.sqlite3 workbench --profile templates/profile.example.json --output local-demo/health-workbench.html
+python scripts/health.py --db local-demo/health.sqlite3 workbench --profile templates/profile.example.json --output local-demo/workbench.html
 ```
 
-打开 `local-demo/report.md` 查看报告，双击 `local-demo/health-workbench.html` 查看交互式工作台。生成器与报告命令需要新的输出文件名，重复演示时可使用新的目录。`templates/profile.example.json` 是示例补充资料，页面会把它标成"示例/待确认"，不会被当成你已确认的数据。
+打开 `local-demo/report.md` 看报告，双击 `local-demo/workbench.html` 看交互式工作台。`templates/profile.example.json` 是示例资料，页面会标「示例/待确认」，不会被当成你确认过的数据。
 
-## 分析自己的数据
+## 用自己的数据
 
-1. 从健康应用导出数据并保存在本机。Apple 健康的入口在个人资料里的「导出所有健康数据」。 [Apple 导出说明](https://support.apple.com/zh-cn/guide/iphone/-iph5ede58c3d/ios)
-2. 在项目目录中执行 `python scripts/health.py import "导出文件路径"`。导入后用 `python scripts/health.py status` 查看指标和覆盖。相同导出会复用缓存，新的导出成功导入后替换该缓存快照。不同用户或需要分别保留的导出可用 `--db` 指定各自的数据库。
-   想把多份导出累积到同一个缓存，在导入时加 `--merge`。历史样本保留，新样本按唯一键去重，`status` 的 `imports` 列出导入格式、模式和新增条数。Apple 的导出仍需解析全部 XML。
+1. **导出**：Apple 健康在「个人资料 → 导出所有健康数据」；华为运动健康与 Garmin Connect 也在各自设置里导出为 CSV/JSON。
+2. **导入**：
+   ```bash
+   python scripts/health.py import "导出文件路径"                 # Apple ZIP，自动识别
+   python scripts/health.py import 导出.csv --format garmin
+   python scripts/health.py import 导出.jsonl --format normalized
+   python scripts/health.py import 新导出.zip --merge             # 并入已有缓存
+   ```
+3. **看覆盖**：`python scripts/health.py status`，确认哪些指标有数据、来自哪些来源、最近一条是哪天。
+4. **出报告**：`python scripts/health.py report --output 报告.md`（默认最近有数据的一周，基线前 90 天）。
 
-   `import --format auto|apple|garmin|huawei|normalized` 默认按内容识别。宿主可在取得权限后将健康数据写成 `normalized-health/1` JSONL，再以 `--format normalized` 导入本地缓存。Garmin/华为适配器按公开通用字段实现，未经真实导出样例校验。 [字段与导入口径](references/record_types.md#本地导出与标准化中间格式)
-3. 运行 `python scripts/health.py report` 查看报告，或用 `--output` 保存 UTF-8 Markdown。默认查看最近有数据的一周，基线取此前 90 天。
-4. 想要交互式版本时运行 `workbench`：`python scripts/health.py workbench --profile 你的补充资料.json --output 健康工作台.html`。页面上方是设备记录（只读），下方是你补的作息、目标、精力、久坐、咖啡因与训练；评分窗口固定取最近一个**已结束**的 7 天，改任何字段都会即时试算，唯一按钮是「恢复初始输入」。
+> 缓存默认在 `~/.health-advisor/health.sqlite3`。若旧版缓存仍在 `~/.apple-health-advisor/`，命令会自动沿用并提示一行，不必手动搬。用 `--db PATH` 可指定任意位置。
 
-```text
+## 命令总览
+
+| 命令 | 作用 |
+| --- | --- |
+| `import <文件>` | 导入导出文件；`--format auto\|apple\|garmin\|huawei\|normalized`，`--merge` 合并去重 |
+| `status` | 指标覆盖、来源、导入历史；`--show-source-names` 只出脱敏标签 |
+| `query --metric …` | 选指标查询；`--daily` 逐日、`--format csv` 导出、`--baseline-days` 调基线 |
+| `report` | 生成 Markdown 报告；`--output` 存文件、`--group` 按组、`--from/--to` 指定区间 |
+| `brief` | 供 AI 写作的聚合证据包（含 `privacy`、`memory`、`archive` 块） |
+| `archive` | ECG 与运动路线档案；`--detail` 逐条列受控字段 |
+| `workbench` | 生成本地交互式 HTML 工作台，需 `--output X.html` |
+| `memory` | 长期记忆：`init` / `show` / `set` / `review` / `forget` / `export` |
+| `migrate` | 原地升级旧 schema 缓存（2/3/4 → 5），清理旧来源字段 |
+| `privacy` | 内部隐私自检（库字节、来源列、journal、坐标），**不生成面向用户的报告** |
+| `purge` | 清理本工具生成的本地数据；默认 dry-run，需 `--yes` 才执行 |
+
+常用例子：
+
+```bash
 python scripts/health.py query --metric sleep --metric resting_hr --metric hrv --days 14
 python scripts/health.py query --metric steps --days 7 --format csv
 python scripts/health.py report --group activity --from 2026-10-01 --to 2026-10-31
 python scripts/health.py report --compare-previous
-python scripts/health.py query --metric sleep --metric workout_minutes --days 14 --daily
-python scripts/health.py brief --days 7
-python scripts/health.py workbench --profile templates/profile.example.json --output local-demo/week.html
-python scripts/health.py archive
-python scripts/health.py archive --detail
+python scripts/health.py memory init
+python scripts/health.py memory set --goal "把入睡时间稳定在 00:30 前"
+python scripts/health.py brief --days 7 --no-memory
 ```
 
-`report` 和 `brief` 带出本期心电图与运动路线摘要，只含聚合计数和受控标签。心电图摘要包含设备分类、通用设备类型、采样点数和有症状填写的记录数。路线摘要包含距离、时长、爬升和最长距离。`archive` 可查看本地档案的覆盖情况，`--detail` 带出逐条记录的日期与受控字段。
+## 支持的指标
 
-查询支持 `--daily` 输出逐日数据、`--baseline-days` 调整基线窗口、`--prefer-source ID` 指定来源优先级。指标和来源规则见 [指标与聚合口径](references/record_types.md)。宿主需要实际日历周时，可显式指定结束日期。
+15 项，取不到的指标如实显示「无记录」，不插值、不猜。
 
-v0.1 缓存仍可直接生成报告，也可查看主睡眠起止与训练次数。如果需要补充原导出已有的睡眠分期和训练类型，用相同的 `--db` 路径重新导入原 ZIP。
+| 分组 | 指标 | 查询键 |
+| --- | --- | --- |
+| 活动与训练 | 步数 / 步行跑步距离 / Apple 运动时间 / 活动能量 / 静息能量 / 训练时长 | `steps` `distance` `exercise_minutes` `active_energy` `basal_energy` `workout_minutes` |
+| 睡眠 | 睡眠时长（含分期） | `sleep` |
+| 心脏与恢复 | 静息心率 / 心率 / 心率变异性 SDNN / 最大摄氧量 | `resting_hr` `heart_rate` `hrv` `vo2_max` |
+| 呼吸 | 呼吸频率 / 血氧饱和度 | `respiratory_rate` `oxygen_saturation` |
+| 身体测量 | 体重 / 体脂率 | `body_mass` `body_fat` |
 
-## 在 Agent 中使用
+另可从档案读取 **ECG**（记录时间、设备分类、症状、采样点数，不读波形）与 **运动路线**（距离、时长、爬升、最长一条，不存轨迹坐标）。口径细节见 [指标与聚合口径](references/record_types.md)。
 
-把整个 `health-advisor` 目录放到宿主约定的 Skill 位置，保留 `SKILL.md`、`scripts/` 和 `references/` 的相对结构。宿主需要能运行 Python 并读取你的本地缓存。启用后，可以说「给我最近有数据的一周的健康报告」或「只看过去两周的睡眠和静息心率」。 [Agent Skills 格式规范](https://agentskills.io/specification)
+## 多品牌与中间格式
 
-需要顾问报告时，可以说「对比最近有数据的一周和前一周，告诉我该优先调整作息还是训练，把判断和复核条件写成 Markdown」。`brief` 提供聚合证据，Agent 先作 [综合判断](references/review.md)，再按 [报告模板](references/dual-perspective.md) 撰写文件。直接运行 `report --output PATH` 可以离线保存统计版。
+`import --format auto` 按内容嗅探四种格式：
 
-完整复盘时，Agent 应先接住你的处境、给出一条首选，再生成 `workbench` 工作台；想被问得更准，可以直接说「这周早会多」「健身房器械训练没戴表」「在减脂平台期」这类背景，[分阶段问卷](references/intake.md) 只会追问 1–2 个会改变结论的问题。需要纯文字时仍可要求 Markdown 复盘。
+- **apple**：健康 App 导出的 ZIP（`export.xml`）
+- **garmin**：Garmin Connect 导出的 CSV（按英文表头关键词匹配，不硬编码列序号）
+- **huawei**：华为运动健康导出的 CSV / JSON（兼容中英文混合表头）
+- **normalized**：`normalized-health/1` JSONL，一行一条
 
-## 数据与隐私
+**宿主拿到健康应用权限时**，只需把数据写成这个格式再导入，全程不联网、不经模型：
 
-本地脚本不联网。默认缓存为 `~/.health-advisor/health.sqlite3`。新位置还没有缓存且旧版缓存存在时，命令会提示并继续在原位置读写。也可在子命令前加 `--db PATH` 选定位置。复盘记忆随选中的缓存读取同目录的 `memory.json`。`status` 和 `query` 使用「Apple Watch #1」这样的来源标签，`status --show-source-names` 也只在 `name` 字段返回这种脱敏标签。schema 5 缓存用品牌和来源指纹去重。已有 schema 2、3 或 4 缓存可执行 `python scripts/health.py migrate` 原地升级。schema 2 和 3 升级时会清理旧来源字段，整个过程只需缓存。使用其他缓存路径时，在 `migrate` 前加 `--db PATH`。成功的合并导入也会升级并清理旧缓存。使用云端 Agent 时，读入会话的摘要可能发送给模型服务并留在聊天记录中。希望全程离线时，可用本地命令生成并打开 Markdown 或工作台。工作台 HTML 同样包含个人健康数据，只写入你指定的本地路径，页面自身不发起任何网络请求（`Content-Security-Policy: default-src 'none'`）。要清除本地产物，可在命令停止后删除相应 SQLite 缓存与导出的报告，原始 ZIP 由用户自行管理。
+```json
+{"schema":"normalized-health/1","metric":"sleep","day":"2026-11-22","start":"2026-11-21T23:30:00+08:00","end":"2026-11-22T07:10:00+08:00","value":7.67,"unit":"hr","state":"asleep","source":{"kind":"watch","brand":"huawei","label":"HUAWEI Watch #1"}}
+```
 
-Apple 健康的来源优先顺序可按指标更改，与本项目的结果可能存在差异。首版将血压、设备事件等未支持的记录类型纳入覆盖清单；ECG 与 GPX 在 0.7.0 已读元数据和几何摘要，CDA 仍只识别附件数量。本版本的报告用于日常观察和复盘。
+> ⚠️ **Garmin 与华为适配器按公开的通用表头字段实现，未经真实导出样例校验。** 字段不匹配的列会被跳过并计数，不会静默丢弃。拿到真实样例后欢迎提 issue 补校验。
+
+## 隐私设计
+
+数据只在本机，脚本零网络请求（`scripts/` 无 socket / urllib / requests / subprocess）。
+
+- **分级**：原始导出 / 可识别字段 / 聚合数据 / 结论，四层各有限定去向，见 [references/privacy.md](references/privacy.md)
+- **脱敏**：`sources` 只存类型与指纹，不存设备名；`status` 输出 `Apple Watch #1` 这类标签
+- **白名单**：`brief` / `report` 只输出聚合字段；`--with-identifiers` 也只多给区间来源数量
+- **自检与清理**：`privacy` 检查库文件字节里是否残留姓名/账号/序列号/坐标；`purge` 按范围清理缓存、记忆与临时产物
+- **记忆可控**：`memory.json` 只存目标、约束与一句话结论，不存逐日数值序列；`memory export` 可带走，`memory forget` 可单条或全部删除
+
+> 走云端 Agent 时，读进会话的聚合摘要可能进入模型上下文与聊天记录。要全程离线，用 `report --output` 与 `workbench` 在本地生成。
+
+## 目录结构
+
+```text
+health-advisor/
+├── SKILL.md              # 技能入口：接题判断、按问题选方法、健康边界
+├── README.md
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── LICENSE               # MIT
+├── docs/                 # 对话体验规格、健康领域框架（六维公式、证据分级、转介边界）
+├── references/           # 方法文件与口径基准（含 privacy.md、record_types.md）
+├── scripts/
+│   ├── health.py         # CLI 主入口，11 个子命令
+│   ├── storage.py        # 流式解析与 SQLite 缓存（schema 5）
+│   ├── analysis.py       # 指标聚合、基线比较、跨夜睡眠合并
+│   ├── insights.py       # 睡眠分期、作息、训练汇总
+│   ├── catalog.py        # 15 项指标定义与来源归并规则
+│   ├── brief.py          # 供 AI 写作的聚合证据包
+│   ├── archive.py        # ECG 元数据与路线几何摘要
+│   ├── privacy.py        # 隐私自检
+│   ├── memory.py         # 长期记忆读写
+│   ├── import_records.py # 共用写库路径
+│   ├── workbench.py / workbench.js / workbench_page.html
+│   └── adapters/         # apple / garmin / huawei / normalized / tabular
+├── templates/            # 补充资料示例
+└── tests/                # 69 项单元测试，全部使用合成数据
+```
+
+## 测试
+
+```bash
+python -m unittest discover -s tests -v   # 69 项
+```
+
+测试只用合成导出，不碰任何真实健康数据。临时目录落在项目内 `_tmp/`，在受限环境里也能跑。贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 已知限制
+
+- **Garmin / 华为适配器未经真实样例校验**（见上文警告）
+- **CDA 临床文档**只统计附件数量，未解析内容
+- **ECG / 路线**只出档案摘要，不做专项分析，也不解读波形
+- **不联网**，没有同步适配器：换设备后需要手动导出再 `import --merge`
+- Apple 健康自身的来源优先级可按指标调整，与本工具结果可能有差异
+
+## 免责声明
+
+本项目用于**日常观察与复盘**，不构成医疗建议、诊断或治疗。设备测量的准确性由设备与佩戴条件决定；任何症状、用药与训练限制请咨询医疗专业人员。若出现胸痛、严重呼吸困难等急症，请立即联系当地急救。
 
 ## 参考实现
 
-- `goutoujunshi` 的接题、取证、首选与反馈复核，对应健康分析的 [取数与证据判断](references/evidence.md) 和 [综合判断与复核](references/review.md)。
-- 「财睿——家庭财富规划师」的主顾问、分领域分析、综合与报告，转化为 [SKILL.md](SKILL.md) 的按需方法选择和统一报告。
-- 健康问询、训练证据和周期复盘参考 [Health Skill](https://github.com/googlarz/health-skill/blob/main/SKILL.md)、[Strava Coach](https://github.com/srothgan/strava-claude-skill/blob/main/skills/strava-coach/SKILL.md) 和 [Fitness Weekly Review](https://github.com/philipyaz/cos/blob/main/board/.claude/skills/fitness-weekly-review/SKILL.md)。
-- 查看指标覆盖与设备来源后再解读，借鉴 [Apple Health Claude Skill](https://github.com/HomuraTokido/apple-health-claude-skill) 的工作流。
-- 本地导入 SQLite 参考 [healthkit-to-sqlite](https://github.com/dogsheep/healthkit-to-sqlite)。按需取数据、区分日查与周报的方式参考 [Apple Health Export Analyzer](https://github.com/krumjahn/applehealth#openclaw-support)。
-- 本地数据与会话聚合摘要的交接方式，参考 [OpenClaw HealthKit 摘要文档](https://docs.openclaw.ai/platforms/ios-healthkit)。
+- `goutoujunshi` 的接题—取证—首选—复核骨架 → [取数与证据判断](references/evidence.md)、[综合判断与复核](references/review.md)
+- 「财睿——家庭财富规划师」的主顾问 / 分领域 / 统一报告编排 → [SKILL.md](SKILL.md)
+- [Health Skill](https://github.com/googlarz/health-skill)、[Strava Coach](https://github.com/srothgan/strava-claude-skill)、[Fitness Weekly Review](https://github.com/philipyaz/cos) 的健康问询与训练证据
+- [healthkit-to-sqlite](https://github.com/dogsheep/healthkit-to-sqlite) 的本地导入思路
+- [Agent Skills 格式规范](https://agentskills.io/specification)
 
-## 开发
+## 许可
 
-```text
-python -m unittest discover -s tests -v
-```
-
-测试只使用合成导出。贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)，版本范围见 [CHANGELOG.md](CHANGELOG.md)。
+[MIT](LICENSE)
