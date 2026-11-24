@@ -1,0 +1,14 @@
+# 统一换行符，避免 Windows 提交把 LF 改成 CRLF
+* text=auto eol=lf
+
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.js text eol=lf
+*.html text eol=lf
+*.yml text eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.sqlite3 binary

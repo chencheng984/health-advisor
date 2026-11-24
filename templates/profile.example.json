@@ -1,0 +1,31 @@
+{
+  "说明": "本文件用于示例试算。制作个人资料时，按评分窗口用实际记录和期前目标替换示例值，再删除 _example 标记。未确认的字段可以省略或填 null。",
+  "_example": true,
+  "adult_reference": true,
+  "goal": "改善睡眠",
+  "weeks_remaining": 5,
+  "bedtime": "22:30",
+  "wake_time": "06:30",
+  "sleep_schedule_consistent": true,
+  "sleep_goal_hours": 7,
+  "steps_goal": 7000,
+  "steps_coverage_confirmed": true,
+  "energy": 5,
+  "energy_days": 5,
+  "stress": 6,
+  "sedentary_hours": 7.2,
+  "caffeine": "1 杯咖啡，约 13:30",
+  "alcohol": "无",
+  "workout_log_complete": true,
+  "workouts": [
+    {"minutes": 35, "rpe": 3},
+    {"minutes": 35, "rpe": 3},
+    {"minutes": 35, "rpe": 4}
+  ],
+  "load_low": 300,
+  "load_high": 340,
+  "plan_sessions": 3,
+  "plan_completed": 2,
+  "plan_unknown": 0,
+  "urgent_symptoms": false
+}

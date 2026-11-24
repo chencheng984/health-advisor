@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>健康工作台</title>
+<style>
+:root {
+  color-scheme: light;
+  --paper: #f3f6f4;
+  --surface: #fff;
+  --ink: #182e2b;
+  --muted: #4f635d;
+  --rule: #d6e1dd;
+  --teal: #086a5a;
+  --wash: #e0f0e9;
+  --gap: #f2ebdf;
+  --urgent: #892b22;
+  font-family: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  line-height: 1.55;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); }
+header, main, footer { width: min(1140px, calc(100% - 48px)); margin-inline: auto; }
+header { padding-top: 28px; }
+h1, h2, h3, p, figure { margin: 0; }
+h1 { font-size: clamp(1.9rem, 4vw, 3.15rem); line-height: 1.12; letter-spacing: -.03em; }
+h2 { font-size: clamp(1.25rem, 3vw, 1.65rem); line-height: 1.3; }
+h3 { font-size: 1rem; line-height: 1.35; }
+.muted, small { color: var(--muted); }
+.hero { margin-block: 18px; padding: 18px 20px; border-radius: 12px; color: #fff; background: #184740; }
+.hero.urgent { background: var(--urgent); }
+.hero p, .section-head p { margin-top: 4px; }
+.meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 24px; margin: 0; }
+.meta dt { color: var(--muted); font-size: .78rem; }
+.meta dd { margin: 0; font-weight: 650; font-size: .91rem; }
+section { margin-block: 22px; }
+.panel { padding: 20px; background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; }
+.section-head { margin-bottom: 14px; }
+.section-head p { color: var(--muted); font-size: .89rem; }
+.fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 16px; }
+.field label, .field small { display: block; font-size: .83rem; }
+.field label { font-weight: 620; }
+.field input, .field select { width: 100%; min-height: 39px; margin-block: 3px; padding: 4px 8px; }
+input, select, button { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 7px; }
+:is(input, select, button, summary):focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+input:invalid { border-color: var(--urgent); }
+.controls { display: flex; gap: 10px 18px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+button { padding: 6px 10px; color: var(--teal); font-weight: 620; cursor: pointer; }
+button:hover { background: var(--wash); }
+summary { cursor: pointer; font-weight: 620; }
+details[open] > summary { margin-bottom: 6px; }
+form > details { margin-top: 12px; border-top: 1px solid var(--rule); padding-top: 10px; }
+form > details .fields { margin-top: 8px; }
+.urgent-control { display: flex; gap: 8px; align-items: baseline; margin-top: 12px; font-size: .86rem; }
+.urgent-control input { accent-color: var(--urgent); }
+.error { color: var(--urgent); font-weight: 650; }
+.scores, .charts { display: grid; gap: 12px; }
+.scores { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.score, .chart { min-width: 0; padding: 14px; border-radius: 10px; background: var(--surface); border: 1px solid var(--rule); }
+.score-head, figcaption { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.score-value { color: var(--teal); font-size: 1.65rem; font-weight: 720; line-height: 1; font-variant-numeric: tabular-nums; }
+meter { display: block; inline-size: 100%; height: 9px; margin-top: 9px; accent-color: var(--teal); }
+meter[hidden] { display: none; }
+meter::-webkit-meter-bar { border: none; border-radius: 8px; background: var(--wash); }
+meter::-webkit-meter-optimum-value { background: var(--teal); }
+.score-state { margin-block: 6px 3px; font-size: .85rem; font-weight: 650; }
+.score-note, .chart p, .chart details { font-size: .84rem; color: var(--muted); overflow-wrap: anywhere; }
+.chart svg { display: block; width: 100%; overflow: visible; margin-top: 6px; }
+svg text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+svg .gridline { fill: none; stroke: var(--rule); }
+svg .gap { fill: var(--gap); }
+svg .target { stroke: #7b5623; stroke-dasharray: 5 4; }
+svg .trace { fill: none; stroke: var(--teal); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+svg circle { fill: var(--teal); }
+.chart figcaption > span { color: var(--muted); font-size: .84rem; white-space: nowrap; }
+.chart .target-caption { color: #6c4c20; }
+.chart .target-caption:empty { display: none; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; text-align: left; font-size: .9rem; }
+th, td { padding: 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+thead { background: var(--wash); }
+tbody small { display: block; font-size: .8rem; overflow-wrap: anywhere; }
+.plan { margin: 0; padding: 0; list-style: none; }
+.plan li { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 12px; padding: 10px 0; border-top: 1px solid var(--rule); }
+.plan li > span { color: var(--teal); font-size: .87rem; font-weight: 650; }
+.plan p { color: var(--muted); font-size: .91rem; margin-top: 2px; }
+.inventory { margin: 0; padding: 0; list-style: none; }
+.inventory li { display: flex; justify-content: space-between; gap: 12px; padding-block: 5px; border-bottom: 1px solid var(--rule); }
+.inventory code { overflow-wrap: anywhere; }
+.inventory span { white-space: nowrap; }
+footer { padding-block: 12px 24px; color: var(--muted); font-size: .84rem; }
+footer p + p { margin-top: 5px; }
+@media (max-width: 780px) {
+  .fields, .scores, .meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  header, main, footer { width: calc(100% - 24px); }
+  .panel { padding: 14px; }
+  .charts, .scores, .meta { grid-template-columns: 1fr; }
+}
+@media print {
+  body { background: #fff; }
+  header, main, footer { width: 100%; }
+  .controls, .urgent-control { display: none; }
+  .hero, .hero.urgent { color: var(--ink); background: var(--surface); border: 2px solid var(--rule); }
+  .score, .chart, .plan li, tr { break-inside: avoid; }
+  details { display: block; }
+  .table-wrap { overflow: visible; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>健康工作台</h1>
+  $demo_note
+  <div class="hero$urgent_class" id="priority" aria-live="polite">
+    <h2 id="priority-title">$hero_title</h2><p id="priority-note">$hero_note</p>
+  </div>
+  <dl class="meta">
+    <div><dt>趋势窗口</dt><dd>$window</dd></div>
+    <div><dt>评分窗口</dt><dd>$score_window</dd></div>
+    <div><dt>对照窗口</dt><dd>$compare_window</dd></div>
+    <div><dt>缓存记录截至</dt><dd>$end</dd></div>
+  </dl>
+</header>
+<main>
+  $review
+  <section class="panel" aria-labelledby="input-title">
+    <div class="section-head"><h2 id="input-title">补充记录与目标</h2>
+      <p>${input_window_note}输入后即时试算，设备汇总见下方对照表。</p></div>
+    <form id="inputs" autocomplete="off" novalidate>
+      <div class="fields">$main_fields</div>
+      <p class="muted"><small>$workout_note</small></p>
+      <details><summary>作息、评分目标与计划完成情况</summary>
+        <div class="fields">$extra_fields</div>
+      </details>
+      <label class="urgent-control"><input name="urgent_symptoms" type="checkbox"$urgent_attrs>目前有持续胸痛、严重气短等需要立即求助的症状</label>
+      <div class="controls"><button type="reset">恢复初始输入</button>
+        <span id="input-status" role="status">$input_status</span>
+        <span id="input-error" class="error" role="alert"></span></div>
+    </form>
+    <noscript><p class="muted">当前显示生成时的静态结果。启用 JavaScript 后可在本页试算。</p></noscript>
+  </section>
+  <section aria-labelledby="scores-title">
+    <div class="section-head"><h2 id="scores-title">六维评分</h2>
+      <p>每项按自己的记录、覆盖和目标计算，满分 100。</p></div>
+    <div class="scores">$cards</div>
+  </section>
+  <section class="panel" aria-labelledby="layers-title">
+    <div class="section-head"><h2 id="layers-title">健康三层</h2></div>
+    <ul class="plan" id="layers">$layers</ul>
+  </section>
+  <section aria-labelledby="trends-title">
+    <div class="section-head"><h2 id="trends-title">逐日趋势</h2><p>阴影为缺测，折线在缺测处断开。虚线随本页目标更新。</p></div>
+    <div class="charts">$charts</div>
+  </section>
+  <section class="panel" aria-labelledby="evidence-title">
+    <div class="section-head"><h2 id="evidence-title">设备汇总与窗口对照</h2>
+      <p>单位和覆盖按指标显示。训练之外的 Apple 运动时间单列。</p></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th scope="col">指标</th><th scope="col">本期中位数</th><th scope="col">对照中位数</th><th scope="col">本期减对照</th></tr></thead>
+      <tbody>$evidence</tbody>
+    </table></div>
+  </section>
+  <section class="panel" aria-labelledby="action-title">
+    <div class="section-head"><h2 id="action-title">行动优先级</h2></div>
+    <ol class="plan" id="actions">$actions</ol>
+  </section>
+  <section class="panel" aria-label="导出记录清单">
+    <details><summary>这份导出里还没用上的记录（$inventory_count 类）</summary>
+      <ul class="inventory">$inventory</ul>
+    </details>
+  </section>
+</main>
+<footer>
+  <p><strong>隐私</strong> · 文件保留逐日汇总和生成时带入的补充资料。试算在本机当前页面进行，重新打开会恢复初始值。分享前请核对其中的数据和日期。</p>
+  <p>用于日常健康观察。不诊断、不调药、不解读设备波形。就医时效按当前症状和医疗专业人员指引判断。</p>
+</footer>
+<script id="workbench-data" type="application/json">$model</script>
+<script>
+$script
+</script>
+</body>
+</html>

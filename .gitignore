@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.venv/
+.coverage
+local-demo/
+_tmp/
+.run/
+_archive/
+data/
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.zip
+*.gpx
+*.xml
+.DS_Store
